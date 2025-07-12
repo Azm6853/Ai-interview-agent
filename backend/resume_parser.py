@@ -1,10 +1,12 @@
-# backend/resume_parser.py
-
-import fitz  # PyMuPDF for reading PDFs
 import spacy
+from spacy.cli import download
 
-# Load spaCy model for entity recognition
-nlp = spacy.load("en_core_web_sm")
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
+
 
 def extract_text_from_pdf(file_path):
     """
