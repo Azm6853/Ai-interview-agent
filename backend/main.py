@@ -49,3 +49,60 @@ async def upload_resume(file: UploadFile = File(...)):
         "matched_role": matched_role
     }
 
+from fastapi import Body
+from agent_engine import generate_question
+
+# In-memory mock state (replace with real session store later)
+session_state = {
+    "stage": "icebreaker",  # or "technical", "behavioral"
+    "asked_questions": [],
+    "role": "Software Engineer"  # default or from role matcher
+}
+
+
+@app.post("/start_interview")
+def start_interview(role: str = Body(..., embed=True)):
+    """
+    Starts the interview with an icebreaker question for the given role.
+    """
+    session_state["stage"] = "icebreaker"
+    session_state["asked_questions"] = []
+    session_state["role"] = role
+
+    question = generate_question(role=role, stage="icebreaker")
+    session_state["asked_questions"].append(question)
+
+    return {
+        "stage": session_state["stage"],
+        "question": question
+    }
+
+
+@app.post("/ask_question")
+def ask_question(answer: str = Body(..., embed=True)):
+    """
+    Accepts the user's answer and returns the next question.
+    Rotates through stages: icebreaker → technical → behavioral → end
+    """
+    current_stage = session_state["stage"]
+
+    # Progress logic: switch stage after first answer
+    if current_stage == "icebreaker":
+        session_state["stage"] = "technical"
+    elif current_stage == "technical":
+        session_state["stage"] = "behavioral"
+    elif current_stage == "behavioral":
+        return {
+            "stage": "complete",
+            "message": "Interview complete. Thank you for participating!"
+        }
+
+    next_stage = session_state["stage"]
+    question = generate_question(role=session_state["role"], stage=next_stage)
+    session_state["asked_questions"].append(question)
+
+    return {
+        "stage": next_stage,
+        "question": question
+    }
+
