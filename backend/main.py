@@ -1,35 +1,43 @@
-# backend/main.py
-
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
 
 from resume_parser import parse_resume
 from utils.role_matcher import match_role
+from agent_engine import generate_question
+from scoring import score_answer
 
 app = FastAPI()
 
-# Allow CORS (Cross-Origin Requests) for frontend access
+# Enable CORS for frontend connection
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your domain
+    allow_origins=["*"],  # For dev only — restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Folder to store uploaded files
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# In-memory session state (will be replaced by DB or Redis later)
+session_state = {
+    "stage": "icebreaker",  # "icebreaker" → "technical" → "behavioral"
+    "asked_questions": [],
+    "role": "Software Engineer"
+}
+
 
 @app.get("/")
 def read_root():
     return {"message": "AI Interview Agent API is running."}
 
+
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
-    # Save uploaded resume with a unique name
+    # Save uploaded file
     file_ext = file.filename.split('.')[-1]
     file_id = f"{uuid.uuid4()}.{file_ext}"
     file_path = os.path.join(UPLOAD_FOLDER, file_id)
@@ -37,11 +45,14 @@ async def upload_resume(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Parse the resume
+    # Parse resume
     parsed_resume = parse_resume(file_path)
 
-    # Match the role using extracted skills
+    # Match role
     matched_role = match_role(parsed_resume.get("skills", []))
+
+    # Save to session
+    session_state["role"] = matched_role["matched_role"]
 
     return {
         "status": "success",
@@ -49,21 +60,11 @@ async def upload_resume(file: UploadFile = File(...)):
         "matched_role": matched_role
     }
 
-from fastapi import Body
-from agent_engine import generate_question
-
-# In-memory mock state (replace with real session store later)
-session_state = {
-    "stage": "icebreaker",  # or "technical", "behavioral"
-    "asked_questions": [],
-    "role": "Software Engineer"  # default or from role matcher
-}
-
 
 @app.post("/start_interview")
 def start_interview(role: str = Body(..., embed=True)):
     """
-    Starts the interview with an icebreaker question for the given role.
+    Starts the interview with an icebreaker question.
     """
     session_state["stage"] = "icebreaker"
     session_state["asked_questions"] = []
@@ -81,28 +82,35 @@ def start_interview(role: str = Body(..., embed=True)):
 @app.post("/ask_question")
 def ask_question(answer: str = Body(..., embed=True)):
     """
-    Accepts the user's answer and returns the next question.
-    Rotates through stages: icebreaker → technical → behavioral → end
+    Accepts the user's answer, scores it, and returns the next question.
     """
-    current_stage = session_state["stage"]
 
-    # Progress logic: switch stage after first answer
+    current_stage = session_state["stage"]
+    current_role = session_state["role"]
+    last_question = session_state["asked_questions"][-1] if session_state["asked_questions"] else ""
+
+    # Evaluate user's answer using GPT rubric
+    evaluation = score_answer(answer=answer, question=last_question)
+
+    # Determine next stage
     if current_stage == "icebreaker":
         session_state["stage"] = "technical"
     elif current_stage == "technical":
         session_state["stage"] = "behavioral"
     elif current_stage == "behavioral":
+        session_state["stage"] = "complete"
         return {
             "stage": "complete",
-            "message": "Interview complete. Thank you for participating!"
+            "message": "Interview complete. Thank you!",
+            "last_question_feedback": evaluation
         }
 
     next_stage = session_state["stage"]
-    question = generate_question(role=session_state["role"], stage=next_stage)
-    session_state["asked_questions"].append(question)
+    next_question = generate_question(role=current_role, stage=next_stage)
+    session_state["asked_questions"].append(next_question)
 
     return {
         "stage": next_stage,
-        "question": question
+        "question": next_question,
+        "last_question_feedback": evaluation
     }
-
