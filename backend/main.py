@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
 
-from resume_parser import parse_resume
+from backend.resume_parser import parse_resume
+
 from utils.role_matcher import match_role
 from agent_engine import generate_question
 from scoring import score_answer
