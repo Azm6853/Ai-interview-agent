@@ -1,7 +1,9 @@
 fastapi
 uvicorn
 python-multipart
-PyMuPDF
+aiofiles
 python-dotenv
-openai>=1.3.5
+openai>=1.0.0  # For AzureOpenAI client
+PyMuPDF  # fitz
 spacy
+requests
