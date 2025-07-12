@@ -1,1 +1,15 @@
+Evaluate the candidate's answer based on the following:
 
+- Clarity (1–5): Was the answer well-articulated?
+- Technical Depth (1–5): Did the answer show good understanding?
+- Relevance (1–5): Did the answer match the question?
+- Confidence (1–5): Did the tone suggest certainty and fluency?
+
+Return response in JSON format:
+{
+  "clarity": 4,
+  "depth": 5,
+  "relevance": 4,
+  "confidence": 5,
+  "feedback": "Strong explanation of hash table operations and complexity."
+}
