@@ -26,3 +26,10 @@ def ask_openai(prompt: str) -> str:
         return response.choices[0].message.content
     except Exception as e:
         return f"Error: {e}"
+
+def generate_question(role: str, stage: str) -> str:
+    """
+    Creates a prompt and queries the AI to generate a role-specific interview question.
+    """
+    prompt = f"Generate a {stage} interview question for a candidate applying for the role of {role}."
+    return ask_openai(prompt)
