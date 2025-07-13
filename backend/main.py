@@ -8,8 +8,8 @@ from backend.resume_parser import parse_resume
 from backend.role_matcher import match_role
 
 
-from agent_engine import generate_question
-from scoring import score_answer
+from backend.agent_engine import generate_question
+from backend.scoring import score_answer
 
 app = FastAPI()
 
