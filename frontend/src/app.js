@@ -1,101 +1,87 @@
 // src/App.js
 import React, { useState } from 'react';
+import './styles.css';
+import axios from 'axios';
 
-const API_URL = "https://ai-interview-agent-q22m.onrender.com";
+const API = process.env.REACT_APP_API_BASE_URL;
 
-export default function App() {
-  const [file, setFile] = useState(null);
-  const [parsedData, setParsedData] = useState(null);
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [stage, setStage] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const [interviewStarted, setInterviewStarted] = useState(false);
+function App() {
+  const [stage, setStage] = useState('upload');
+  const [resumeData, setResumeData] = useState(null);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [feedback, setFeedback] = useState('');
 
-  const handleFileUpload = async () => {
-    if (!file) return alert("Please select a PDF resume.");
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append('file', file);
 
-    const res = await fetch(`${API_URL}/upload_resume`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-    setParsedData(data);
-    alert("Resume uploaded and parsed. Matched role: " + data.matched_role.matched_role);
+    const res = await axios.post(`${API}/upload_resume`, formData);
+    setResumeData(res.data);
+    setStage('show-role');
   };
 
   const startInterview = async () => {
-    const res = await fetch(`${API_URL}/start_interview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: parsedData?.matched_role.matched_role || "Software Engineer" }),
-    });
-    const data = await res.json();
-    setInterviewStarted(true);
-    setQuestion(data.question);
-    setStage(data.stage);
-    setFeedback("");
+    const role = resumeData?.matched_role?.matched_role || 'Software Engineer';
+    const res = await axios.post(`${API}/start_interview`, { role });
+    setQuestion(res.data.question);
+    setStage('interview');
   };
 
-  const askNext = async () => {
-    const res = await fetch(`${API_URL}/ask_question`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer }),
-    });
-    const data = await res.json();
-    setQuestion(data.question || "");
-    setStage(data.stage);
-    setFeedback(data.last_question_feedback?.feedback || "");
-    setAnswer("");
-
-    if (data.stage === "complete") {
-      alert("Interview complete!");
+  const handleSubmitAnswer = async () => {
+    const res = await axios.post(`${API}/ask_question`, { answer });
+    if (res.data.stage === 'complete') {
+      setFeedback(res.data.last_question_feedback?.feedback);
+      setStage('complete');
+    } else {
+      setQuestion(res.data.question);
+      setFeedback(res.data.last_question_feedback?.feedback);
+      setAnswer('');
     }
   };
 
   return (
-    <div style={{ padding: "2rem", fontFamily: "Arial" }}>
+    <div className="app-container">
       <h1>AI Interview Agent</h1>
 
-      <div>
-        <input type="file" accept=".pdf" onChange={(e) => setFile(e.target.files[0])} />
-        <button onClick={handleFileUpload}>Upload Resume</button>
-      </div>
+      {stage === 'upload' && (
+        <div>
+          <h2>Upload your resume (PDF)</h2>
+          <input type="file" accept="application/pdf" onChange={handleUpload} />
+        </div>
+      )}
 
-      {parsedData && !interviewStarted && (
-        <div style={{ marginTop: "1rem" }}>
-          <p><strong>Matched Role:</strong> {parsedData?.matched_role?.matched_role}</p>
+      {stage === 'show-role' && resumeData && (
+        <div>
+          <h2>Matched Role: {resumeData.matched_role.matched_role}</h2>
+          <pre>{JSON.stringify(resumeData.parsed_resume, null, 2)}</pre>
           <button onClick={startInterview}>Start Interview</button>
         </div>
       )}
 
-      {interviewStarted && (
-        <div style={{ marginTop: "2rem" }}>
-          <p><strong>Stage:</strong> {stage}</p>
+      {stage === 'interview' && (
+        <div>
+          <h2>Interview Stage</h2>
           <p><strong>Question:</strong> {question}</p>
-
+          {feedback && <p className="feedback">Last Feedback: {feedback}</p>}
           <textarea
-            rows="4"
-            style={{ width: "100%" }}
-            placeholder="Your answer..."
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
+            placeholder="Type your answer here"
           />
+          <button onClick={handleSubmitAnswer}>Submit Answer</button>
+        </div>
+      )}
 
-          <button onClick={askNext} style={{ marginTop: "1rem" }}>Submit Answer</button>
-
-          {feedback && (
-            <div style={{ marginTop: "1rem", background: "#f0f0f0", padding: "1rem" }}>
-              <p><strong>Feedback:</strong> {feedback}</p>
-            </div>
-          )}
+      {stage === 'complete' && (
+        <div>
+          <h2>Interview Complete 🎉</h2>
+          <p>Final Feedback: {feedback}</p>
         </div>
       )}
     </div>
   );
 }
 
+export default App;
