@@ -1,31 +1,32 @@
-# Stage 1: Build frontend
-FROM node:18 as frontend
-WORKDIR /frontend
+# Stage 1: Build React frontend
+FROM node:18 as frontend-builder
+WORKDIR /app
 COPY frontend/ .
 RUN npm install && npm run build
 
-# Stage 2: Backend + frontend serving
+# Stage 2: Build FastAPI backend and serve frontend
 FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (tesseract + poppler for resume parsing)
+# Install system dependencies
 RUN apt-get update && apt-get install -y build-essential libpoppler-cpp-dev pkg-config tesseract-ocr && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend and prompt code
-COPY backend/ ./backend/
-COPY prompts/ ./prompts/
+# Copy backend
+COPY backend/ backend/
+COPY prompts/ prompts/
 
-# Copy built frontend into backend/static
-COPY --from=frontend /frontend/build ./backend/static
+# Copy built frontend from Stage 1
+COPY --from=frontend-builder /app/build backend/static/
 
-# Expose port
+# Add CORS and Mount Static in main.py (see next step)
+
+# Expose FastAPI port
 EXPOSE 7860
 
-# Start FastAPI server
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
