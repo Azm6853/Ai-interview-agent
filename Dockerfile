@@ -1,32 +1,40 @@
-# Stage 1: Build React frontend
-FROM node:18 as frontend-builder
-WORKDIR /app
-COPY frontend/ .
-RUN npm install && npm run build
+# Stage 1: Install Python dependencies
+FROM python:3.10-slim AS backend
 
-# Stage 2: Build FastAPI backend and serve frontend
-FROM python:3.10-slim
-
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y build-essential libpoppler-cpp-dev pkg-config tesseract-ocr && rm -rf /var/lib/apt/lists/*
+# System dependencies for resume parsing
+RUN apt-get update && apt-get install -y build-essential libpoppler-cpp-dev pkg-config tesseract-ocr curl && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend
+# Copy backend code
 COPY backend/ backend/
 COPY prompts/ prompts/
+COPY main.py .
 
-# Copy built frontend from Stage 1
-COPY --from=frontend-builder /app/build backend/static/
+# Stage 2: Build React frontend
+FROM node:18 AS frontend
 
-# Add CORS and Mount Static in main.py (see next step)
+WORKDIR /frontend
+COPY frontend/ .          # This includes src/, public/, package.json, etc.
+RUN npm install && npm run build
 
-# Expose FastAPI port
+# Stage 3: Final unified image
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Copy Python environment from backend stage
+COPY --from=backend /app /app
+
+# Copy built React app from frontend stage
+COPY --from=frontend /frontend/build /app/frontend/build
+
+# Expose port
 EXPOSE 7860
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start FastAPI app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
