@@ -2,10 +2,7 @@
 FROM node:18 AS frontend
 
 WORKDIR /frontend
-
-# Copy and install frontend dependencies
-COPY frontend/ ./frontend
-WORKDIR /frontend/frontend
+COPY frontend/ ./
 RUN npm install && npm run build
 
 # Stage 2: Backend + Serve built frontend
@@ -22,16 +19,15 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source
+# Copy backend source code
 COPY backend/ backend/
 COPY prompts/ prompts/
-COPY backend/main.py .
 
-# Copy built frontend from stage 1
-COPY --from=frontend /frontend/frontend/build ./frontend_build
+# Copy built frontend
+COPY --from=frontend /frontend/build ./frontend_build
 
-# Expose default FastAPI port
+# Expose FastAPI port
 EXPOSE 7860
 
-# Start backend
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start server
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
